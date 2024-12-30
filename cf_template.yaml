@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance running a Python script as a service on Ubuntu
+
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: t2.micro
+      ImageId: ami-0a628e1e89aaedf80
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update package list and install Python3
+          apt update -y
+          apt install -y python3 python3-pip
+
+          # Generate SSH keys
+          mkdir -p /home/ubuntu/.ssh
+          ssh-keygen -t rsa -b 2048 -f /home/ubuntu/.ssh/my_key -N ""
+
+          # Write the Python HTTP server script
+          mkdir /home/ubuntu/Honey
+          mkdir /home/ubuntu/Honey/honey
+          echo "Secret credentials" > /home/ubuntu/Honey/honey/secret.txt
+          curl https://raw.githubusercontent.com/MatJosephs/The-Honeypot-Project/refs/heads/main/honey_server.py -o /home/ubuntu/Honey/honey_server.py
+          sudo su
+          cd /home/ubuntu/Honey
+          setsid python3 honey_server.py 2>&1 | tee honey_out.txt
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  InstanceId:
+    Description: "InstanceId of the newly created EC2 instance"
+    Value: !Ref MyEC2Instance
+
+  PublicIP:
+    Description: "Public IP Address of the newly created EC2 instance"
+    Value: !GetAtt MyEC2Instance.PublicIp
